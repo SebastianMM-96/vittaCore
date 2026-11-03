@@ -1049,7 +1049,7 @@ function App() {
       return
     }
     setAppointmentDraft({
-      patientId: String(patient.id),
+      patientId: String(workspace.patients[0].id),
       date: today,
       time: '09:00',
       visit: 'Consulta de seguimiento',

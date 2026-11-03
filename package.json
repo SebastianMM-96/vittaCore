@@ -27,8 +27,8 @@
     "vite": "^6.0.5"
   },
   "build": {
-    "appId": "org.vittacore.desktop",
-    "productName": "VittaCore",
+    "appId": "org.vittacore.desktop.beta.1_0_1",
+    "productName": "VittaCore Beta 1.0.1",
     "directories": {
       "output": "release"
     },
@@ -39,7 +39,7 @@
     ],
     "win": {
       "target": "nsis",
-      "artifactName": "VittaCore-Setup-${version}.${ext}"
+      "artifactName": "VittaCore-Beta-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -47,7 +47,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "VittaCore"
+      "shortcutName": "VittaCore Beta 1.0.1"
     }
   },
   "allowScripts": {

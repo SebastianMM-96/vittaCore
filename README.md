@@ -10,9 +10,9 @@ npm run desktop
 npm run dist:win
 ```
 
-`npm run desktop` compila y abre la aplicación de escritorio. `npm run dist:win` genera un instalador NSIS en `release/VittaCore-Setup-1.0.1-beta.1.exe`; el instalador permite elegir la carpeta y crea accesos directos. El instalador generado debe ejecutarse en Windows.
+`npm run desktop` compila y abre la aplicación de escritorio. `npm run dist:win` genera un instalador NSIS en `release/VittaCore-Beta-Setup-1.0.1-beta.1.exe`; el instalador permite elegir la carpeta y crea accesos directos. Este instalador es para Windows.
 
-La versión de escritorio escribe sus datos en `vittacore-data.json` dentro de la carpeta de datos de VittaCore en el perfil local de Windows (`%APPDATA%`). Este archivo es independiente de los datos guardados previamente por la versión web. La primera apertura no incluye expedientes de pacientes; sí incluye un catálogo de referencia con alimentos comunes y tres menús de ejemplo para adaptar desde **Planes nutricionales**. Ahí selecciona cada día de la semana para agregar tiempos, ingredientes, porciones e imágenes opcionales; el calendario completo aparece en la vista previa y el reporte imprimible. Las imágenes se comprimen y se guardan en el dispositivo junto con el expediente. Los planes diarios anteriores se conservan como punto de partida para cada día al actualizar el formato.
+La beta de escritorio guarda sus datos en `%APPDATA%/VittaCore Beta 1.0.1/vittacore-data.json`, en una carpeta separada de cualquier versión previa de VittaCore. Así, la primera apertura se muestra limpia, sin expedientes, y no modifica los datos existentes de otras instalaciones. Incluye un catálogo de referencia con alimentos comunes y tres menús de ejemplo para adaptar desde **Planes nutricionales**. Ahí selecciona cada día de la semana para agregar tiempos, ingredientes, porciones e imágenes opcionales; el calendario completo aparece en la vista previa y el reporte imprimible. Las imágenes se comprimen y se guardan en el dispositivo junto con el expediente.
 
 ## Beta `beta_v1.0.1`
 

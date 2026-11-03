@@ -3,6 +3,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const STORE_FILE = 'vittacore-data.json'
+const BETA_USER_DATA_PATH = path.join(app.getPath('appData'), 'VittaCore Beta 1.0.1')
 const ALLOWED_KEYS = new Set([
   'vittacore-workspace-v1',
   'vittacore-setup-complete-v1',
@@ -11,6 +12,8 @@ const ALLOWED_KEYS = new Set([
   'nutrivida-workspace-v1',
   'nutrivida-templates',
 ])
+
+app.setPath('userData', BETA_USER_DATA_PATH)
 
 function getStorePath() {
   return path.join(app.getPath('userData'), STORE_FILE)
@@ -75,7 +78,7 @@ function createWindow() {
     height: 960,
     minWidth: 920,
     minHeight: 680,
-    title: 'VittaCore',
+    title: 'VittaCore Beta 1.0.1',
     backgroundColor: '#f7f8f6',
     autoHideMenuBar: true,
     webPreferences: {
@@ -99,7 +102,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  app.setAppUserModelId('org.vittacore.desktop')
+  app.setAppUserModelId('org.vittacore.desktop.beta.1_0_1')
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
