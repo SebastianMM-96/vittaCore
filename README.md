@@ -1,6 +1,6 @@
 # VittaCore
 
-Aplicación local para nutriólogos independientes: expedientes, evolución antropométrica, cálculo dietético, menús y reportes listos para impresión. No requiere cuenta, API ni servidor.
+Aplicación local para nutriólogos independientes: expedientes, evolución antropométrica, cálculo dietético, menús y reportes listos para impresión. No requiere cuenta, API ni servidor. La beta `1.0.1` está limitada a cinco altas de pacientes y no incluye portal de paciente.
 
 ## Aplicación de escritorio para Windows
 
@@ -10,9 +10,16 @@ npm run desktop
 npm run dist:win
 ```
 
-`npm run desktop` compila y abre la aplicación de escritorio. `npm run dist:win` genera un instalador NSIS en `release/VittaCore-Setup-1.0.0.exe`; el instalador permite elegir la carpeta y crea accesos directos. El instalador generado debe ejecutarse en Windows.
+`npm run desktop` compila y abre la aplicación de escritorio. `npm run dist:win` genera un instalador NSIS en `release/VittaCore-Setup-1.0.1-beta.1.exe`; el instalador permite elegir la carpeta y crea accesos directos. El instalador generado debe ejecutarse en Windows.
 
-La versión de escritorio escribe sus datos en `vittacore-data.json` dentro de la carpeta de datos de VittaCore en el perfil local de Windows (`%APPDATA%`). Este archivo es independiente de los datos guardados previamente por la versión web. La primera apertura no incluye expedientes de pacientes; sí incluye un catálogo de referencia con alimentos comunes y tres menús de ejemplo para adaptar desde **Planes nutricionales**. Ahí selecciona cada día de la semana para agregar tiempos, ingredientes, porciones e imágenes opcionales; el portal del paciente, la lista de compras y el reporte imprimible muestran el calendario completo. Las imágenes se comprimen y se guardan en el dispositivo junto con el expediente. Los planes diarios anteriores se conservan como punto de partida para cada día al actualizar el formato.
+La versión de escritorio escribe sus datos en `vittacore-data.json` dentro de la carpeta de datos de VittaCore en el perfil local de Windows (`%APPDATA%`). Este archivo es independiente de los datos guardados previamente por la versión web. La primera apertura no incluye expedientes de pacientes; sí incluye un catálogo de referencia con alimentos comunes y tres menús de ejemplo para adaptar desde **Planes nutricionales**. Ahí selecciona cada día de la semana para agregar tiempos, ingredientes, porciones e imágenes opcionales; el calendario completo aparece en la vista previa y el reporte imprimible. Las imágenes se comprimen y se guardan en el dispositivo junto con el expediente. Los planes diarios anteriores se conservan como punto de partida para cada día al actualizar el formato.
+
+## Beta `beta_v1.0.1`
+
+- Permite registrar un máximo de cinco pacientes. El contador de altas se conserva aunque se importe un respaldo, y la edición de expedientes existentes sigue disponible al terminar la prueba.
+- Los respaldos con más de cinco pacientes no se pueden importar en esta versión.
+- El portal y el conmutador de vista de paciente están deshabilitados; los planes semanales, su vista previa, impresión y canales de envío siguen disponibles para el profesional.
+- La rama local de esta versión es `beta_v1.0.1`.
 
 Para desarrollar la interfaz web en el navegador:
 

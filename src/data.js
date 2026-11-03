@@ -132,6 +132,7 @@ export const initialData = {
   },
   activePatientId: null,
   patients: [],
+  betaPatientRegistrations: 0,
   appointments: [],
   foods: baseFoods,
 }

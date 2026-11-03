@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
-  Apple, ArrowRight, Bell, CalendarDays, Check,
-  CheckCircle2, ChevronDown, ChevronRight, CircleHelp, ClipboardList,
-  Clock3, Download, FileDown, FileText, Flame, FolderOpen, Heart, LayoutDashboard, Leaf,
-  ListChecks, LockKeyhole, LogOut, Mail, MapPin, Menu, MessageCircle, NotebookTabs, Plus, Printer, Search,
-  Pencil, Settings2, ShieldCheck, ShoppingBasket, Sparkles, Target, TrendingDown,
+  Apple, ArrowRight, CalendarDays, Check,
+  CheckCircle2, ChevronDown, ChevronRight, CircleHelp,
+  Clock3, Download, FileText, Flame, FolderOpen, LayoutDashboard, Leaf,
+  LockKeyhole, LogOut, Mail, MapPin, Menu, MessageCircle, NotebookTabs, Plus, Printer, Search,
+  Pencil, Settings2, ShieldCheck, Sparkles, Target,
   UsersRound, Utensils, Video, X, Scale, Activity, Upload, Trash2, ImagePlus, Save,
 } from 'lucide-react'
 import {
@@ -19,6 +19,7 @@ const STORAGE_KEY = 'vittacore-workspace-v1'
 const SETUP_KEY = 'vittacore-setup-complete-v1'
 const ACCESS_KEY = 'vittacore-local-access-v1'
 const PASSWORD_ITERATIONS = 310000
+const BETA_PATIENT_LIMIT = 5
 const MEAL_TIMES = ['Desayuno', 'Colación', 'Colación 2', 'Comida', 'Cena']
 const WEEK_DAYS = [
   { key: 'monday', label: 'Lunes', jsDay: 1 },
@@ -206,6 +207,7 @@ function readWorkspace() {
       ...initialData,
       ...parsed,
       patients,
+      betaPatientRegistrations: Math.max(patients.length, Number(parsed.betaPatientRegistrations) || 0),
       appointments: Array.isArray(parsed.appointments) ? parsed.appointments : [],
       foods: mergeFoodCatalog(parsed.foods),
       professional,
@@ -670,7 +672,6 @@ function ChangePasswordForm({ onClose, onChanged }) {
 
 function App() {
   const [workspace, setWorkspace] = useState(readWorkspace)
-  const [role, setRole] = useState('professional')
   const [setupComplete, setSetupComplete] = useState(() => appStorage.getItem(SETUP_KEY) === 'true')
   const [accessStatus, setAccessStatus] = useState(() => appStorage.getItem(ACCESS_KEY) ? 'locked' : 'setup')
   const [setupDraft, setSetupDraft] = useState(() => ({ ...workspace.professional }))
@@ -691,10 +692,8 @@ function App() {
   const [toast, setToast] = useState('')
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [mobileNav, setMobileNav] = useState(false)
-  const [activeDay, setActiveDay] = useState(() => localDateValue())
   const [selectedPlanDay, setSelectedPlanDay] = useState(() => dayKeyForDate(localDateValue()))
   const importRef = useRef(null)
-  const [newNote, setNewNote] = useState('')
   const [calculator, setCalculator] = useState({ formula: 'mifflin', activity: 1.4 })
   const [macroMode, setMacroMode] = useState('grams')
   const [templates, setTemplates] = useState(readTemplates)
@@ -798,10 +797,13 @@ function App() {
   const patient = workspace.patients.find((item) => item.id === workspace.activePatientId) || workspace.patients[0] || createEmptyPatient()
   const patientWeeklyMenu = patient.weeklyMenu || normalizeWeeklyMenu(patient)
   const planDayMenu = patientWeeklyMenu[selectedPlanDay] || []
-  const portalDayKey = dayKeyForDate(activeDay)
-  const portalDayMenu = patientWeeklyMenu[portalDayKey] || []
   const estimatedCalories = calculation(patient, calculator)
   const today = localDateValue()
+  const dailyMacros = planDayMenu.reduce((total, meal) => ({
+    protein: total.protein + Number(meal.protein || 0),
+    carbs: total.carbs + Number(meal.carbs || 0),
+    fat: total.fat + Number(meal.fat || 0),
+  }), { protein: 0, carbs: 0, fat: 0 })
   const weekEnd = new Date()
   weekEnd.setDate(weekEnd.getDate() + (7 - (weekEnd.getDay() || 7)))
   const weekEndDate = localDateValue(weekEnd)
@@ -844,37 +846,9 @@ function App() {
   }
   const filteredPatients = workspace.patients.filter((item) => (patientStatusFilter === 'Todos' || item.status === patientStatusFilter) && `${item.name} ${item.email} ${item.goal}`.toLowerCase().includes(search.toLowerCase()))
   const dailyCalories = planDayMenu.reduce((sum, meal) => sum + Number(meal.calories || 0), 0)
-  const portalCalories = portalDayMenu.reduce((sum, meal) => sum + Number(meal.calories || 0), 0)
-  const dailyMacros = planDayMenu.reduce((total, meal) => ({
-    protein: total.protein + Number(meal.protein || 0),
-    carbs: total.carbs + Number(meal.carbs || 0),
-    fat: total.fat + Number(meal.fat || 0),
-  }), { protein: 0, carbs: 0, fat: 0 })
-  const completedMeals = portalDayMenu.filter((meal) => patient.checklist?.[meal.id]).length
-  const shoppingItems = useMemo(() => {
-    const groups = {}
-    WEEK_DAYS.forEach(({ key: dayKey }) => {
-      const meals = patientWeeklyMenu[dayKey] || []
-      meals.forEach((meal) => {
-        meal.items.forEach((text) => {
-          const key = text.replace(/^\d+(?:[.,]\d+)?\s*(?:g|kg|ml|taza|tazas|cucharadita|cucharadas|pieza|piezas|rebanadas)?\s*(?:de\s+)?/i, '').trim()
-          if (!key) return
-          if (!groups[meal.department]) groups[meal.department] = []
-          if (!groups[meal.department].some((item) => item.name.toLowerCase() === key.toLowerCase())) groups[meal.department].push({ name: key, id: `${meal.department}-${key}` })
-        })
-      })
-    })
-    return groups
-  }, [patientWeeklyMenu])
-
   const selectPatient = (id) => {
     setWorkspace((current) => ({ ...current, activePatientId: id }))
     setPage('patients')
-  }
-  const setRoleMode = (nextRole) => {
-    setRole(nextRole)
-    if (nextRole === 'patient') setPage('portal')
-    else if (page === 'portal') setPage('overview')
   }
   const exportBackup = () => {
     const blob = new Blob([JSON.stringify({ ...workspace, templates, exportedAt: new Date().toISOString(), format: 'vittacore-backup-v1' }, null, 2)], { type: 'application/json' })
@@ -892,10 +866,12 @@ function App() {
     try {
       const imported = JSON.parse(await file.text())
       if (!Array.isArray(imported.patients) || !imported.professional || !Array.isArray(imported.foods)) throw new Error('El archivo no contiene un respaldo válido de VittaCore.')
+      if (imported.patients.length > BETA_PATIENT_LIMIT) throw new Error(`La beta admite respaldos de hasta ${BETA_PATIENT_LIMIT} pacientes.`)
       setWorkspace({
         ...initialData,
         ...imported,
         patients: imported.patients.map((patient) => ({ ...patient, weeklyMenu: normalizeWeeklyMenu(patient), menu: undefined })),
+        betaPatientRegistrations: Math.max(workspace.betaPatientRegistrations, imported.patients.length, Number(imported.betaPatientRegistrations) || 0),
         foods: mergeFoodCatalog(imported.foods),
         professional: { ...initialData.professional, ...imported.professional },
       })
@@ -1058,6 +1034,10 @@ function App() {
     setModal('plan')
   }
   const addPatient = () => {
+    if (workspace.betaPatientRegistrations >= BETA_PATIENT_LIMIT) {
+      setModal('beta-limit')
+      return
+    }
     setPatientDraft(createEmptyPatient(Date.now()))
     setIsCreatingPatient(true)
     setPage('patients')
@@ -1098,7 +1078,22 @@ function App() {
   }
   const savePatientForm = (savedPatient) => {
     if (isCreatingPatient) {
-      setWorkspace((current) => ({ ...current, patients: [savedPatient, ...current.patients], activePatientId: savedPatient.id }))
+      if (workspace.betaPatientRegistrations >= BETA_PATIENT_LIMIT) {
+        closePatientForm()
+        setModal('beta-limit')
+        return
+      }
+      const registrationCount = workspace.betaPatientRegistrations + 1
+      setWorkspace((current) => ({
+        ...current,
+        patients: [savedPatient, ...current.patients],
+        activePatientId: savedPatient.id,
+        betaPatientRegistrations: current.betaPatientRegistrations + 1,
+      }))
+      closePatientForm()
+      if (registrationCount >= BETA_PATIENT_LIMIT) setModal('beta-limit')
+      else setToast('Paciente agregado correctamente.')
+      return
     } else {
       setWorkspace((current) => ({
         ...current,
@@ -1106,7 +1101,7 @@ function App() {
       }))
     }
     closePatientForm()
-    setToast(isCreatingPatient ? 'Paciente agregado correctamente.' : 'Ficha del paciente actualizada.')
+    setToast('Ficha del paciente actualizada.')
   }
   const addFood = () => {
     setFoodIndex(null)
@@ -1191,12 +1186,6 @@ function App() {
     setTemplatePreview(null)
     setToast(`Menú "${templatePreview.name}" aplicado al ${dayLabel(selectedPlanDay)} de ${patient.name}.`)
   }
-  const createNote = () => {
-    if (!newNote.trim()) return
-    updatePatient({ notes: [{ id: Date.now(), text: newNote.trim(), date: new Date().toLocaleDateString('es-MX') }, ...(patient.notes || [])] })
-    setNewNote('')
-    setToast('Nota guardada para tu nutrióloga.')
-  }
   const signOut = () => {
     setProfileMenuOpen(false)
     setModal(null)
@@ -1207,61 +1196,13 @@ function App() {
     setToast('Contraseña de acceso actualizada.')
   }
 
-  const activityMenu = (
-    <>
-      <div className="section-heading"><div><p className="eyebrow">TU SEMANA, A TU RITMO</p><h2>Plan del {dayLabel(portalDayKey)} <span className="heading-date">· {new Date(`${activeDay}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}</span></h2></div>
-        <button className="button button-quiet button-small" onClick={() => setModal('plan')}><FileText size={15} /> Ver plan completo</button>
-      </div>
-      <div className="portal-progress-card">
-        <div><div className="progress-caption">Tu progreso del {dayLabel(portalDayKey).toLowerCase()}</div><strong>{completedMeals} <span>de {portalDayMenu.length} comidas</span></strong></div>
-        <div className="progress-right"><span>{portalDayMenu.length ? Math.round((completedMeals / portalDayMenu.length) * 100) : 0}%</span><div className="progress-track"><div style={{ width: `${portalDayMenu.length ? Math.round((completedMeals / portalDayMenu.length) * 100) : 0}%` }} /></div></div>
-      </div>
-      <div className="meal-list">
-        {portalDayMenu.map((meal) => {
-          const checked = Boolean(patient.checklist?.[meal.id])
-          return <article className={`portal-meal ${checked ? 'meal-complete' : ''}`} key={meal.id}>
-            <div className="meal-time-col"><span>{meal.hour}</span><i /></div>
-            <button className={`meal-check ${checked ? 'checked' : ''}`} onClick={() => updatePatient({ checklist: { ...patient.checklist, [meal.id]: !checked } })} aria-label={checked ? 'Marcar como pendiente' : 'Marcar como completada'}>{checked && <Check size={14} />}</button>
-            <div className="meal-card">
-              <div className="meal-card-title"><div><span className="meal-label">{meal.time}</span><h3>{meal.title}</h3></div><span className="kcal-label">{meal.calories} kcal</span></div>
-              {meal.image && <img className="portal-meal-image" src={meal.image} alt={`Platillo: ${meal.title}`} />}
-              <ul className="ingredient-list">{meal.items.map((item, index) => <li key={`${meal.id}-${index}`}>{item}</li>)}</ul>
-              {checked && <span className="meal-done-label"><CheckCircle2 size={13} /> ¡Bien hecho! Comida registrada</span>}
-            </div>
-          </article>
-        })}
-        {!portalDayMenu.length && <div className="empty-state"><Utensils size={23} /><strong>No hay comidas para {dayLabel(portalDayKey).toLowerCase()}</strong><span>Tu nutrióloga puede personalizar el menú de cada día.</span></div>}
-      </div>
-      <div className="portal-lower-grid">
-        <section className="surface-card shopping-card">
-          <div className="card-heading"><div className="card-title-icon"><ShoppingBasket size={17} /></div><div><h3>Lista de compras</h3><p>Ingredientes consolidados de toda la semana</p></div><span className="items-count">{Object.values(shoppingItems).flat().length} artículos</span></div>
-          {Object.keys(shoppingItems).length ? <div className="shopping-groups">{Object.entries(shoppingItems).map(([group, items]) => <div key={group}><h4>{group}</h4>{items.map((item) => {
-            const checked = Boolean(patient.shoppingChecked?.[item.id])
-            return <label className={`shopping-item ${checked ? 'shopping-done' : ''}`} key={item.id}><input type="checkbox" checked={checked} onChange={() => updatePatient({ shoppingChecked: { ...patient.shoppingChecked, [item.id]: !checked } })} /><span className="custom-check"><Check size={12} /></span>{item.name}</label>
-          })}</div>)}</div> : <p className="empty-copy">La lista aparecerá cuando tengas comidas en tu plan.</p>}
-          <button className="text-button" onClick={() => setModal('shopping')}>Ver lista completa <ArrowRight size={14} /></button>
-        </section>
-        <section className="surface-card coach-card">
-          <div className="card-heading"><div className="card-title-icon mint"><Heart size={17} /></div><div><h3>Un recordatorio para ti</h3><p>De tu nutrióloga</p></div></div>
-          <div className="coach-message">“{patient.recommendations[0] || 'Cada pequeño paso que das cuenta. Confía en el proceso.'}”</div>
-          <div className="coach-signature"><Avatar name={workspace.professional.name} size="small" /><div><strong>{workspace.professional.name.replace(/^Dra\.\s*/, '')}</strong><span>Tu nutrióloga</span></div></div>
-        </section>
-      </div>
-      <section className="surface-card feedback-card">
-        <div className="card-heading"><div className="card-title-icon lilac"><ClipboardList size={17} /></div><div><h3>¿Cómo te fue hoy?</h3><p>Comparte una nota con tu nutrióloga</p></div></div>
-        <div className="feedback-form"><input value={newNote} onChange={(event) => setNewNote(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && createNote()} placeholder="Cuéntanos cómo te sentiste con tu plan..." /><button className="button button-primary button-small" onClick={createNote}>Enviar nota <ArrowRight size={14} /></button></div>
-        {(patient.notes || []).slice(0, 2).map((note) => <div className="saved-note" key={note.id}><span>{note.text}</span><small>{note.date}</small></div>)}
-      </section>
-    </>
-  )
-
   if (setupComplete && accessStatus !== 'authenticated') {
     return <LocalAccessGate mode={accessStatus} onAuthenticated={() => setAccessStatus('authenticated')} />
   }
 
   return (
-    <div className={`app-shell ${role === 'patient' ? 'patient-shell' : ''}`} style={{ '--brand': workspace.professional.color || '#347c62' }}>
-      {role === 'professional' && <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
+    <div className="app-shell" style={{ '--brand': workspace.professional.color || '#347c62' }}>
+      <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
         <div className="sidebar-brand"><span className="brand-mark"><Leaf size={20} /></span><span>Vitta<span>Core</span><small>ESPACIO PROFESIONAL</small></span><button className="icon-button mobile-close" onClick={() => setMobileNav(false)}><X size={17} /></button></div>
         <div className="profile-switch"><Avatar name={workspace.professional.name || 'Nutriólogo'} size="small" /><div><strong>{workspace.professional.name || 'Identidad profesional'}</strong><span>{workspace.professional.officeName || 'Consultorio independiente'}</span></div><ChevronDown size={15} /></div>
         <div className="side-label">CONSULTORIO</div>
@@ -1273,41 +1214,17 @@ function App() {
         <div className="backup-card"><div className="backup-icon"><ShieldCheck size={16} /></div><strong>Respaldo local</strong><div className={`backup-semaphore backup-semaphore-${backupIndicatorTone}`} role="status"><i />{backupConnectionStatus}</div><p>{backupStatusText}</p><button onClick={() => setPage('settings')}>Administrar respaldo <ArrowRight size={13} /></button></div>
         <button className={`nav-link settings-link ${page === 'settings' ? 'nav-active' : ''}`} onClick={() => setPage('settings')}><Settings2 size={18} /><span>Configuración</span></button>
         <div className="sidebar-foot"><span className={`online-dot backup-dot-${backupIndicatorTone}`} /> {backupState === 'saved' ? 'Copia local actualizada' : backupConnectionStatus}</div>
-      </aside>}
-      {role === 'professional' && mobileNav && <button className="sidebar-scrim" onClick={() => setMobileNav(false)} aria-label="Cerrar navegación" />}
+      </aside>
+      {mobileNav && <button className="sidebar-scrim" onClick={() => setMobileNav(false)} aria-label="Cerrar navegación" />}
 
       <main className="main-area">
-        {role === 'professional' ? <header className="topbar">
+        <header className="topbar">
           <button className="icon-button mobile-menu" onClick={() => setMobileNav(true)} aria-label="Abrir navegación"><Menu size={20} /></button>
           <div className="breadcrumb"><span>Consultorio</span><ChevronRight size={14} /> <strong>{page === 'overview' ? 'Resumen' : page === 'patients' ? 'Pacientes' : page === 'plans' ? 'Planes nutricionales' : page === 'foods' ? 'Alimentos' : 'Configuración'}</strong></div>
-          <div className="topbar-actions"><span className="single-user-label"><ShieldCheck size={14} /> Datos locales</span><button className="button button-quiet button-small" onClick={() => setRoleMode('patient')}><Heart size={14} /> Vista paciente</button><div className="profile-menu-wrap"><button className="profile-mini" aria-label="Abrir menú de cuenta" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}><Avatar name={workspace.professional.name || 'Nutriólogo'} size="small" /><ChevronDown size={14} /></button>{profileMenuOpen && <div className="profile-menu"><strong>{workspace.professional.name}</strong><button onClick={() => { setProfileMenuOpen(false); setPage('settings') }}><Settings2 size={15} /> Configuración</button><button onClick={signOut}><LogOut size={15} /> Cerrar sesión</button></div>}</div></div>
-        </header> : <header className="portal-topbar">
-          <button className="portal-brand" onClick={() => setPage('portal')}><span className="brand-mark"><Leaf size={19} /></span><span>nutri<span>vida</span></span></button>
-          <div className="portal-top-actions"><div className="role-switch"><button onClick={() => setRoleMode('professional')}><Activity size={14} /> Nutriólogo</button><button className="role-selected" onClick={() => setRoleMode('patient')}><Heart size={14} /> Paciente</button></div><button className="portal-avatar" onClick={() => setModal('profile')}><Avatar name={patient.name} size="small" /></button></div>
-        </header>}
+          <div className="topbar-actions"><span className="single-user-label"><ShieldCheck size={14} /> Datos locales</span><span className="beta-badge">BETA · 1.0.1</span><div className="profile-menu-wrap"><button className="profile-mini" aria-label="Abrir menú de cuenta" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}><Avatar name={workspace.professional.name || 'Nutriólogo'} size="small" /><ChevronDown size={14} /></button>{profileMenuOpen && <div className="profile-menu"><strong>{workspace.professional.name}</strong><button onClick={() => { setProfileMenuOpen(false); setPage('settings') }}><Settings2 size={15} /> Configuración</button><button onClick={signOut}><LogOut size={15} /> Cerrar sesión</button></div>}</div></div>
+        </header>
 
-        {role === 'patient' ? <div className="portal-content">
-          <div className="portal-welcome"><div><span className="eyebrow">{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }).toLocaleUpperCase('es-MX')}</span><h1>Hola, {patient.name.split(' ')[0]} <span className="wave">✳</span></h1><p>Un día a la vez. Tu plan está aquí para acompañarte.</p></div><button className="button button-quiet" onClick={() => setModal('plan')}><FileDown size={16} /> Descargar mi plan</button></div>
-          <div className="portal-metrics">
-            <div className="portal-metric"><div className="metric-icon green"><Flame size={17} /></div><span>Meta del día</span><strong>{patient.targets.calories.toLocaleString()} <small>kcal</small></strong><span className="metric-foot">{portalCalories ? `${portalCalories.toLocaleString()} kcal en tu menú` : 'Tu objetivo diario'}</span></div>
-            <div className="portal-metric"><div className="metric-icon peach"><ListChecks size={17} /></div><span>Comidas completadas</span><strong>{completedMeals} <small>/ {portalDayMenu.length}</small></strong><span className="metric-foot">Vas a tu propio ritmo</span></div>
-            <div className="portal-metric"><div className="metric-icon lilac"><Target size={17} /></div><span>Tu objetivo</span><strong className="objective-value">{patient.goal}</strong><span className="metric-foot">Cada paso cuenta ✨</span></div>
-          </div>
-          <div className="portal-layout"><section>{activityMenu}</section><aside className="portal-aside">
-            <section className="surface-card aside-card"><div className="card-heading"><div className="card-title-icon"><CalendarDays size={16} /></div><div><h3>Tu semana</h3><p>Pequeños pasos, grandes cambios</p></div></div>            <div className="week-strip">{Array.from({ length: 7 }, (_, index) => {
-              const today = new Date()
-              const mondayOffset = (today.getDay() + 6) % 7
-              const date = new Date(today)
-              date.setDate(today.getDate() - mondayOffset + index)
-              const label = date.toLocaleDateString('es-MX', { weekday: 'short' }).replace('.', '')
-              const dayId = localDateValue(date)
-              const isPast = date < new Date(today.getFullYear(), today.getMonth(), today.getDate())
-              return <button key={dayId} onClick={() => setActiveDay(dayId)} className={`week-day ${activeDay === dayId ? 'week-today' : isPast ? 'week-done' : ''}`} aria-pressed={activeDay === dayId}><span>{label}</span><i>{isPast ? <Check size={13} /> : date.getDate()}</i></button>
-            })}</div><div className="week-tip"><Sparkles size={15} /><span>La constancia se construye con calma y cariño.</span></div></section>
-            <section className="surface-card aside-card alternative-card"><div className="card-heading"><div className="card-title-icon mint"><Apple size={16} /></div><div><h3>¿Quieres variar?</h3><p>Alternativas para ti</p></div></div><div className="alternative-item"><span>En lugar de <b>quinoa</b></span><ArrowRight size={14} /><span>Prueba <b>arroz integral</b></span></div><div className="alternative-item"><span>En lugar de <b>pollo</b></span><ArrowRight size={14} /><span>Prueba <b>tofu firme</b></span></div><p className="alternative-foot">Porciones equivalentes. Ante dudas, consulta a tu nutrióloga.</p></section>
-            <section className="professional-contact"><Avatar name={workspace.professional.name} /><div><span>¿Tienes alguna duda?</span><strong>{workspace.professional.name}</strong><a href={`mailto:${workspace.professional.email}`}><Mail size={12} /> Escríbele un mensaje</a></div><ChevronRight size={16} /></section>
-          </aside></div>
-        </div> : <div className="professional-content">
+        <div className="professional-content">
           {page === 'overview' && <div className="dashboard-page">
             <div className="welcome-row"><div><p className="eyebrow">{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toLocaleUpperCase('es-MX')}</p><h1>Buenos días, {welcomeName} <span className="wave">✳</span></h1><p>{workspace.professional.officeName || 'Tu consultorio'} · Tu información clínica permanece local.</p></div><div className="welcome-actions"><button className="button button-quiet" onClick={scheduleAppointment} disabled={!workspace.patients.length}><CalendarDays size={16} /> Agendar cita</button><button className="button button-primary" onClick={addPatient}><Plus size={17} /> Nuevo paciente</button></div></div>
             <div className="stat-grid dashboard-kpis">
@@ -1341,7 +1258,7 @@ function App() {
           </div>}
 
           {page === 'patients' && <div className="inner-page">
-            <div className="page-title-row"><div><p className="eyebrow">TU CONSULTORIO</p><h1>Pacientes</h1><p>Gestiona expedientes y acompaña cada proceso.</p></div><button className="button button-primary" onClick={addPatient}><Plus size={17} /> Nuevo paciente</button></div>
+            <div className="page-title-row"><div><p className="eyebrow">TU CONSULTORIO</p><h1>Pacientes</h1><p>Gestiona expedientes y acompaña cada proceso. Prueba beta: {workspace.betaPatientRegistrations}/{BETA_PATIENT_LIMIT} registros utilizados.</p></div><button className="button button-primary" onClick={addPatient}><Plus size={17} /> Nuevo paciente</button></div>
             <div className="patient-workspace">
               <section className="surface-card patient-list-card"><div className="list-toolbar"><div><h3>Todos tus pacientes</h3><p>{workspace.patients.length} expedientes</p></div><div className="patient-list-filters"><label className="status-filter"><span className="visually-hidden">Filtrar por estado</span><select value={patientStatusFilter} onChange={(event) => setPatientStatusFilter(event.target.value)}><option>Todos</option><option>Activo</option><option>Inactivo</option></select></label><div className="search-field"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar paciente..." /></div></div></div>
                 <div className="patient-list">{filteredPatients.map((p) => <button key={p.id} onClick={() => setWorkspace((current) => ({ ...current, activePatientId: p.id }))} className={`patient-list-row ${patient.id === p.id ? 'selected-patient' : ''}`}><Avatar name={p.name} size="small" /><div><strong>{p.name}</strong><span>{p.goal}</span></div><i className={`status-dot ${p.status === 'Activo' ? '' : 'status-inactive'}`} /></button>)}{!filteredPatients.length && <div className="empty-patients-state"><UsersRound size={20} /><strong>{workspace.patients.length ? 'Sin resultados' : 'Aún no tienes pacientes'}</strong><span>{workspace.patients.length ? 'Ajusta el filtro o la búsqueda.' : 'Crea el primer expediente para comenzar.'}</span>{!workspace.patients.length && <button className="button button-primary button-small" onClick={addPatient}><Plus size={14} /> Nuevo paciente</button>}</div>}</div>
@@ -1417,11 +1334,12 @@ function App() {
               </aside>
             </div>
           </div>}
-        </div>}
+        </div>
       </main>
 
       {modal === 'plan' && <Modal title="Vista previa del plan" subtitle="Así se verá el documento para tu paciente." onClose={() => setModal(null)} wide><NutritionPlan patient={patient} professional={workspace.professional} onClose={() => setModal(null)} onPrint={printPlan} onEmail={emailPlan} onWhatsApp={whatsAppPlan} /></Modal>}
       {modal === 'backup' && <Modal title="Copia de seguridad" subtitle="Tus datos viven en este dispositivo. Exporta una copia para conservarlos." onClose={() => setModal(null)}><div className="backup-modal-content"><div className="backup-explainer"><div className="backup-icon"><ShieldCheck size={19} /></div><div><strong>Almacenamiento local</strong><p>Pacientes, planes, alimentos e identidad profesional se guardan en este navegador y no se envían a un servidor. El navegador y los archivos JSON no cifran estos datos; protege el acceso al dispositivo y a las copias.</p></div></div><button className="backup-action" onClick={exportBackup}><span className="backup-action-icon"><Download size={18} /></span><span><b>Exportar respaldo JSON</b><small>Descarga una copia completa de tus datos</small></span><ArrowRight size={16} /></button><button className="backup-action" onClick={() => importRef.current?.click()}><span className="backup-action-icon"><Upload size={18} /></span><span><b>Importar respaldo JSON</b><small>Restaura datos desde un respaldo existente</small></span><ArrowRight size={16} /></button><input ref={importRef} className="visually-hidden" type="file" accept=".json,application/json" onChange={importBackup} /><div className="backup-warning"><CircleHelp size={14} /><span>Al importar se reemplazarán los datos guardados actualmente.</span></div></div></Modal>}
+      {modal === 'beta-limit' && <Modal title="Periodo de prueba terminado" subtitle={`La beta de VittaCore permite registrar hasta ${BETA_PATIENT_LIMIT} pacientes.`} onClose={() => setModal(null)}><div className="beta-limit-content"><p>Ya utilizaste los {BETA_PATIENT_LIMIT} registros incluidos en esta versión de prueba. Puedes seguir consultando y editando los expedientes existentes.</p><div className="beta-limit-count">{workspace.betaPatientRegistrations} de {BETA_PATIENT_LIMIT} registros utilizados</div><div className="modal-actions"><button className="button button-primary" onClick={() => setModal(null)}>Entendido</button></div></div></Modal>}
       {modal === 'patient' && patientDraft && <Modal title={isCreatingPatient ? 'Nuevo paciente' : 'Editar ficha del paciente'} subtitle={isCreatingPatient ? 'Completa los datos básicos para crear el expediente.' : 'Actualiza la información clínica y de contacto.'} onClose={closePatientForm} wide><PatientForm key={patientDraft.id} patient={patientDraft} onSave={savePatientForm} onClose={closePatientForm} /></Modal>}
       {modal === 'appointment' && appointmentDraft && <Modal title="Agendar una cita" subtitle="Registra la fecha, hora y modalidad de la consulta." onClose={() => { setModal(null); setAppointmentDraft(null) }}><AppointmentForm appointment={appointmentDraft} patients={workspace.patients} onSave={saveAppointment} onClose={() => { setModal(null); setAppointmentDraft(null) }} /></Modal>}
       {modal === 'change-password' && <Modal title="Cambiar contraseña" subtitle="Confirma tu contraseña actual y crea una nueva de al menos 8 caracteres." onClose={() => setModal(null)}><ChangePasswordForm onClose={() => setModal(null)} onChanged={onPasswordChanged} /></Modal>}
@@ -1430,8 +1348,6 @@ function App() {
       {modal === 'menu-template-editor' && templateDraft && <Modal title={templates.some((template) => template.id === templateDraft.id) ? 'Editar menú' : 'Crear menú'} subtitle="Guarda y modifica una plantilla independiente del plan del paciente." onClose={() => { setModal(null); setTemplateDraft(null) }} wide><MenuTemplateForm key={templateDraft.id} template={templateDraft} onCancel={() => { setModal(null); setTemplateDraft(null) }} onSave={saveMenuTemplate} /></Modal>}
       {modal === 'menu-template' && templatePreview && <Modal title={templatePreview.name} subtitle={templatePreview.description || 'Plantilla de menú'} onClose={() => { setModal(null); setTemplatePreview(null) }} wide><div className="menu-template-preview"><div className="template-summary"><strong>{templatePreview.menu.reduce((total, meal) => total + Number(meal.calories || 0), 0).toLocaleString()} kcal</strong><span>estimadas · {templatePreview.menu.length} tiempos</span></div>{templatePreview.menu.map((meal, index) => <article key={`${meal.id || templatePreview.id}-${index}`}><div><span>{meal.time} · {meal.hour}</span><strong>{meal.title}</strong><p>{meal.items.join(' · ')}</p></div><b>{meal.calories} kcal</b></article>)}</div><p className="template-disclaimer">Menú de ejemplo: las porciones y valores son orientativos. Revisa alergias, preferencias y necesidades clínicas antes de asignarlo.</p><div className="modal-actions"><button className="button button-quiet" onClick={() => { setModal(null); setTemplatePreview(null) }}>Cerrar</button><button className="button button-primary" onClick={applyMenuTemplate}><Check size={15} /> Aplicar al plan de {patient.name}</button></div></Modal>}
       {modal === 'food' && foodDraft && <Modal title={foodIndex === null ? 'Agregar alimento' : 'Editar alimento'} subtitle="Los valores se guardan en la base de datos de este dispositivo." onClose={() => setModal(null)} wide><div className="patient-edit-form"><Field label="Nombre" value={foodDraft.name} onChange={(value) => setFoodDraft({ ...foodDraft, name: value })} /><Field label="Porción de referencia" value={foodDraft.portion} onChange={(value) => setFoodDraft({ ...foodDraft, portion: value })} /><label className="field"><span>Categoría</span><select value={foodDraft.category} onChange={(event) => setFoodDraft({ ...foodDraft, category: event.target.value })}><option>Proteínas</option><option>Cereales</option><option>Frutas y verduras</option><option>Lácteos</option><option>Grasas</option><option>Otros</option></select></label>{[['Energía (kcal)', 'calories'], ['Proteína (g)', 'protein'], ['Carbohidratos (g)', 'carbs'], ['Lípidos (g)', 'fat'], ['Sodio (mg)', 'sodium'], ['Calcio (mg)', 'calcium'], ['Hierro (mg)', 'iron']].map(([label, key]) => <Field key={key} label={label} type="number" value={foodDraft[key]} onChange={(value) => setFoodDraft({ ...foodDraft, [key]: Number(value) })} />)}</div><div className="modal-actions"><button className="button button-quiet" onClick={() => setModal(null)}>Cancelar</button><button className="button button-primary" onClick={saveFood}><Check size={15} /> Guardar alimento</button></div></Modal>}
-      {modal === 'shopping' && <Modal title="Lista de compras semanal" subtitle="Ingredientes de todos los días, consolidados por departamento." onClose={() => setModal(null)}><div className="shopping-modal-list">{Object.entries(shoppingItems).map(([group, items]) => <section key={group}><h4>{group}</h4>{items.map((item) => { const checked = Boolean(patient.shoppingChecked?.[item.id]); return <label className={`shopping-item ${checked ? 'shopping-done' : ''}`} key={item.id}><input type="checkbox" checked={checked} onChange={() => updatePatient({ shoppingChecked: { ...patient.shoppingChecked, [item.id]: !checked } })} /><span className="custom-check"><Check size={12} /></span>{item.name}</label> })}</section>)}</div></Modal>}
-      {modal === 'profile' && <Modal title="Tu perfil" subtitle="Tu portal nutricional personalizado." onClose={() => setModal(null)}><div className="profile-modal"><Avatar name={patient.name} /><div><strong>{patient.name}</strong><span>{patient.goal}</span></div><p>Tu plan fue preparado por {workspace.professional.name}. Tus datos de adherencia se guardan en este dispositivo.</p><button className="button button-quiet" onClick={() => { setModal('plan') }}><FileText size={15} /> Ver mi plan completo</button></div></Modal>}
       {!setupComplete && <Onboarding
         draft={setupDraft}
         setDraft={setSetupDraft}
